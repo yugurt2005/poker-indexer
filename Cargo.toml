@@ -1,9 +1,20 @@
 [package]
-name = "indexer"
+name = "poker_indexer"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+name = "poker_indexer"
+path = "src/lib.rs"
 
 [dependencies]
 rand = "0.8.5"
 smallvec = "1.13.2"
 hand_indexer = { path = "src/poker-hand-indexer-master" }
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "poker_indexer_benchmark"
+harness = false

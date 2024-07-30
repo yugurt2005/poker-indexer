@@ -1,5 +1,5 @@
-use std::cmp;
 use rand::Rng;
+use std::cmp;
 
 const ROUND_SHIFT: usize = 4;
 const ROUND_MASK: u64 = 0b1111;
@@ -24,7 +24,7 @@ pub fn biggest_set_bit_position(n: u64) -> Option<u32> {
 
 impl Indexer {
     pub fn new(cards_per_round: Vec<u8>) -> Indexer {
-        let indexer = Indexer {
+        let mut indexer = Indexer {
             count: 0,
             cards_per_round,
             permutation_to_config: vec![0; 1e6 as usize],
@@ -33,6 +33,17 @@ impl Indexer {
             config_suit_size: Vec::new(),
             index_to_rank_set: Vec::new(),
         };
+
+        indexer.enumerate_configs(
+            0,
+            0,
+            indexer.cards_per_round[0] as u64,
+            [0; 4],
+            [0; 4],
+            0b1110,
+        );
+        indexer.enumerate_perms(0, 0, indexer.cards_per_round[0] as u64, [0; 4], [0; 4]);
+        indexer.enumerate_index_sets();
 
         indexer
     }
@@ -424,7 +435,10 @@ impl Indexer {
             idxs.push((lexo_order, self.index_group(sets, 0)));
         }
 
-        println!("group indices {:?}", idxs.iter().map(|x| x.1).collect::<Vec<u64>>());
+        println!(
+            "group indices {:?}",
+            idxs.iter().map(|x| x.1).collect::<Vec<u64>>()
+        );
 
         idxs.sort_by(|a, b| b.cmp(a));
 
@@ -472,7 +486,11 @@ impl Indexer {
             config_idx, perm_idx, permut, config_offset
         );
 
-        println!("idx before offset = {}; answer = {}", idx, idx + config_offset);
+        println!(
+            "idx before offset = {}; answer = {}",
+            idx,
+            idx + config_offset
+        );
 
         return idx + config_offset;
     }
@@ -485,7 +503,8 @@ impl Indexer {
         println!("configuration {}", configuration);
 
         for r in 0..self.cards_per_round.len() {
-            let n = configuration >> (self.cards_per_round.len() - r - 1) * ROUND_SHIFT & ROUND_MASK as u64;
+            let n = configuration >> (self.cards_per_round.len() - r - 1) * ROUND_SHIFT
+                & ROUND_MASK as u64;
             let round_size = self.choose(13 - m as u32, n as u32);
             m += n;
 
@@ -839,7 +858,7 @@ mod test {
             vec![1 << 2, 0, 0, 0],
             vec![0, 1 << 9, 0, 0],
             vec![0, 0, 1, 2],
-        ]; 
+        ];
 
         let sbs2 = sets_by_suit.clone();
 
