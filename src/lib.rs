@@ -409,20 +409,7 @@ impl Indexer {
     fn get_offset(&self, config_index: u64) -> u64 {
         let mut res = 0;
         for i in 0..config_index {
-            let mut num = 0;
-            for j in 0..4 {
-                for k in 0..4 {
-                    num += self.configurations[i as usize][j]
-                        >> (self.cards_per_round.len() - k - 1) * ROUND_SHIFT
-                        & ROUND_MASK;
-                }
-            }
-
-            // println!("{}: {:?} | {}", i, self.configurations[i as usize], num);
-
-            if num == 7 {
-                res += self.config_offset[i as usize]
-            }
+            res += self.config_offset[i as usize]
         }
 
         res
