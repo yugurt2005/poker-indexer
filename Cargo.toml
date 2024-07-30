@@ -1,0 +1,9 @@
+[package]
+name = "indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+smallvec = "1.13.2"
+hand_indexer = { path = "src/poker-hand-indexer-master" }
