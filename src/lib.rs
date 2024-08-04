@@ -101,9 +101,7 @@ impl Indexer {
                 x /= n;
             }
 
-            let ok = s == self.rounds[round];
-
-            if ok {
+            if s == self.rounds[round] {
                 if (1..SUITS).all(|i| config[i as usize] >= config[i as usize - 1]) {
                     self.configs.push(config);
                 }
@@ -122,14 +120,8 @@ impl Indexer {
     }
 
     fn calculate_configs(&mut self) {
-        self.offsets.push(0);
-
         for config in &self.configs {
-            // println!("{:?}", config);
-
             self.sizes.push([0; SUITS as usize]);
-
-            self.offsets.push(1);
 
             for (key, chunk) in &(0..SUITS as usize).chunk_by(|&x| config[x]) {
                 let mut r = RANKS;
@@ -141,19 +133,33 @@ impl Indexer {
                     r -= c;
                 }
 
-                let v: Vec<usize> = chunk.collect();
-
-                for &x in &v {
+                for x in chunk {
                     self.sizes.last_mut().unwrap()[x] = s;
                 }
-
-                *self.offsets.last_mut().unwrap() *=
-                    self.nck(s + v.len() as u32 - 1, v.len() as u32)
             }
         }
 
-        for i in 1..self.offsets.len() {
-            self.offsets[i] += self.offsets[i - 1];
+        self.offsets.push(0);
+        for c in 0..self.configs.len() {
+            let mut offset = 1;
+
+            let mut cnt = 1;
+            let mut pre = 0;
+
+            for i in 1..SUITS as usize {
+                if self.configs[c][i] == self.configs[c][pre] {
+                    cnt += 1;
+                }
+                else {
+                    offset = offset * self.nck(self.sizes[c][pre] + cnt - 1, cnt);
+
+                    cnt = 1;
+                    pre = i;
+                }
+            }
+            offset = offset * self.nck(self.sizes[c][pre] + cnt - 1, cnt);
+
+            self.offsets.push(offset + self.offsets[c]);
         }
     }
 
@@ -175,9 +181,7 @@ impl Indexer {
                 x /= n;
             }
 
-            let ok = s == self.rounds[round];
-
-            if ok {
+            if s == self.rounds[round] {
                 let mut p = 0;
                 let mut m = 1;
                 for i in 0..=round {
@@ -317,7 +321,7 @@ impl Indexer {
                 cnt += 1;
             }
             else {
-                answer = answer * self.nck(self.sizes[c][i] + cnt - 1, cnt) + sum;
+                answer = answer * self.nck(self.sizes[c][pre] + cnt - 1, cnt) + sum;
 
                 sum = x;
                 cnt = 1;
