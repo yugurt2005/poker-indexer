@@ -1,5 +1,6 @@
 use std::cmp;
 
+use itertools::Itertools;
 use smallvec::SmallVec;
 
 const CHOOSE_SIZE: usize = 15;
@@ -21,11 +22,16 @@ pub struct Indexer {
 
     map: Vec<usize>,
 
-    order: Vec<[u8; SUITS as usize]>,
+    order: Vec<[usize; SUITS as usize]>,
 }
 
 impl Indexer {
     pub fn new(rounds: Vec<u32>) -> Indexer {
+        let count = rounds
+            .iter()
+            .map(|&x| (x + 1).pow(SUITS) as usize)
+            .product();
+
         let mut indexer = Indexer {
             rounds,
 
@@ -33,18 +39,21 @@ impl Indexer {
 
             colex: Vec::new(),
 
-            configs: vec![[0; 4]],
-            offsets: vec![0],
+            configs: Vec::new(),
+            offsets: Vec::new(),
 
-            sizes: vec![[1; 4]],
+            sizes: Vec::new(),
 
-            map: Vec::new(),
+            map: vec![0; count],
 
-            order: Vec::new(),
+            order: vec![[0; 4]; count],
         };
 
         indexer.create_choose();
         indexer.create_colex();
+        indexer.enumerate_configs([0; 4], 0);
+        indexer.calculate_configs();
+        indexer.build_map([0; 4], 0);
 
         indexer
     }
@@ -82,44 +91,22 @@ impl Indexer {
         let n = self.rounds[round] + 1;
         let p = self.rounds.len() - round - 1;
 
-        for i in 0..u32::pow(n + 1, SUITS) {
+        for i in 0..n.pow(SUITS) {
             let mut x = i;
             let mut s = 0;
-            for j in 0..SUITS {
-                config[j as usize] |= (x % n) << (p * 4);
+            for j in 1..=SUITS {
+                config[(SUITS - j) as usize] |= (x % n) << (p * 4);
 
                 s += x % n;
                 x /= n;
             }
 
-            let ok = s == self.rounds[round]
-                && (1..SUITS).all(|j| config[j as usize] >= config[j as usize - 1]);
+            let ok = s == self.rounds[round];
 
             if ok {
-                self.configs.push(config);
-
-                self.sizes.push([0; 4]);
-
-                let mut j = 0;
-                while j < SUITS {
-                    let mut r = RANKS;
-                    let mut s = 1;
-                    for k in 0..=round {
-                        let c = config[j as usize] >> (self.rounds.len() - k - 1) * 4 & 0b1111;
-
-                        s *= self.nck(r, c);
-                        r -= c;
-                    }
-
-                    let mut k = 0;
-                    while k < SUITS as usize && config[j as usize] == config[k] {
-                        self.sizes.last_mut().unwrap()[k] = s;
-                        k += 1;
-                    }
-
-                    j = k as u32;
+                if (1..SUITS).all(|i| config[i as usize] >= config[i as usize - 1]) {
+                    self.configs.push(config);
                 }
-
                 self.enumerate_configs(config, round + 1);
             }
 
@@ -130,8 +117,100 @@ impl Indexer {
         }
 
         if round == 0 {
-            for i in 1..self.offsets.len() {
-                self.offsets[i] += self.offsets[i - 1];
+            self.configs.sort();
+        }
+    }
+
+    fn calculate_configs(&mut self) {
+        self.offsets.push(0);
+
+        for config in &self.configs {
+            // println!("{:?}", config);
+
+            self.sizes.push([0; SUITS as usize]);
+
+            self.offsets.push(1);
+
+            for (key, chunk) in &(0..SUITS as usize).chunk_by(|&x| config[x]) {
+                let mut r = RANKS;
+                let mut s = 1;
+                for k in 0..self.rounds.len() {
+                    let c = key >> (self.rounds.len() - k - 1) * 4 & 0b1111;
+
+                    s *= self.nck(r, c);
+                    r -= c;
+                }
+
+                let v: Vec<usize> = chunk.collect();
+
+                for &x in &v {
+                    self.sizes.last_mut().unwrap()[x] = s;
+                }
+
+                *self.offsets.last_mut().unwrap() *=
+                    self.nck(s + v.len() as u32 - 1, v.len() as u32)
+            }
+        }
+
+        for i in 1..self.offsets.len() {
+            self.offsets[i] += self.offsets[i - 1];
+        }
+    }
+
+    fn build_map(&mut self, mut permutation: [u32; SUITS as usize], round: usize) {
+        if round == self.rounds.len() {
+            return;
+        }
+
+        let n = self.rounds[round] + 1;
+        let p = self.rounds.len() - round - 1;
+
+        for i in 0..n.pow(SUITS) {
+            let mut x = i;
+            let mut s = 0;
+            for j in 1..=SUITS {
+                permutation[(SUITS - j) as usize] |= (x % n) << (p * 4);
+
+                s += x % n;
+                x /= n;
+            }
+
+            let ok = s == self.rounds[round];
+
+            if ok {
+                let mut p = 0;
+                let mut m = 1;
+                for i in 0..=round {
+                    let mut r = self.rounds[i];
+                    for x in permutation {
+                        let c = x >> (self.rounds.len() - i - 1) * 4 & 0b1111;
+
+                        p += c * m;
+                        m *= r + 1;
+
+                        r -= c;
+                    }
+                }
+
+                for i in 0..SUITS as usize {
+                    for k in 0..SUITS as usize {
+                        self.order[p as usize][i] += (permutation[i] > permutation[k]) as usize;
+                    }
+                }
+
+                let mut sorted = permutation.clone();
+                sorted.sort();
+
+                self.map[p as usize] = self.configs.binary_search(&sorted).unwrap();
+
+                // println!("{}: {:?} | {:?}", p, permutation, self.order[p as usize]);
+
+                self.build_map(permutation, round + 1);
+            }
+
+            for j in 0..SUITS {
+                permutation[j as usize] >>= p * 4 + 4;
+                permutation[j as usize] <<= p * 4 + 4;
             }
         }
     }
@@ -147,24 +226,39 @@ impl Indexer {
             let mut answer = 1;
 
             for i in 0..cmp::min(k, n - k) {
-                answer *= n - i;
-                answer /= i + 1;
+                answer *= (n - i) as u64;
+                answer /= (i + 1) as u64;
             }
 
-            answer
+            answer as u32
         }
     }
 
-    fn permutation(&self) -> usize {
-        0
+    fn permutation(&self, input: &SmallVec<[u64; 4]>) -> usize {
+        let mut p = 0;
+        let mut m = 1;
+        for i in 0..input.len() {
+            let mut r = self.rounds[i];
+            for j in 0..SUITS {
+                let c = (input[i] >> RANKS * j & ((1 << RANKS) - 1)).count_ones();
+
+                p += c * m;
+                m *= r + 1;
+
+                r -= c;
+            }
+        }
+
+        p as usize
     }
 
     fn colex(&self, mut s: u64, u: u64) -> u32 {
+        // TODO: optimize using memoization
         let mut answer = 0;
 
-        let m = s.count_ones();
-        for i in 1..=m {
-            let p = 5; //s.trailing_zeros();
+        let mut i = 1;
+        while s > 0 {
+            let p = s.trailing_zeros();
             let b = 1 << p;
 
             let mask = b - 1;
@@ -173,50 +267,138 @@ impl Indexer {
             answer += self.nck(rank as u32, i);
 
             s &= s - 1;
+            i += 1;
         }
 
         answer
     }
 
-    #[inline]
-    fn colex_multi_1(&self, a1: u32) -> u32 {
-        a1
-    }
+    fn multicolex(&self, s: SmallVec<[u32; 4]>) -> u32 {
+        let mut answer = 0;
 
-    #[inline]
-    fn colex_multi_2(&self, a1: u32, a2: u32) -> u32 {
-        a2 + self.nck(a1 + 1, 2)
-    }
+        for i in 0..s.len() {
+            answer += self.nck(i as u32 + s[i], i as u32 + 1);
+        }
 
-    #[inline]
-    fn colex_multi_3(&self, a1: u32, a2: u32, a3: u32) -> u32 {
-        a3 + self.nck(a2 + 1, 2) + self.nck(a1 + 2, 3)
-    }
-
-    #[inline]
-    fn colex_multi_4(&self, a1: u32, a2: u32, a3: u32, a4: u32) -> u32 {
-        a4 + self.nck(a3 + 1, 2) + self.nck(a2 + 2, 3) + self.nck(a1 + 3, 4)
+        answer
     }
 
     pub fn index(&self, input: SmallVec<[u64; 4]>) -> u32 {
-        let mut indices = [0; 4];
+        let p = self.permutation(&input);
+        let c = self.map[p];
 
-        for i in 0..SUITS as usize {
-            let mut used = 0;
-            for &cards in &input {
-                let cards = cards >> RANKS * i as u32 & ((1 << RANKS) - 1);
+        // println!("p: {}, c: {}", p, c);
 
-                indices[i] += self.colex(cards, used)
-                    * self.nck(RANKS - used.count_ones(), cards.count_ones());
+        let mut a: SmallVec<[(usize, u32); 4]> = (0..SUITS as usize)
+            .map(|i| {
+                let mut x = 0;
+                let mut m = 1;
 
-                used |= cards;
-            }
+                let mut used: u64 = 0;
+                for &cards in &input {
+                    let cards = cards >> RANKS * i as u32 & ((1 << RANKS) - 1);
+
+                    let s = self.nck(RANKS - used.count_ones(), cards.count_ones());
+
+                    x += m * self.colex(cards, used);
+                    m *= s;
+
+                    used |= cards;
+                }
+
+                (self.order[p][i], x)
+            })
+            .collect();
+
+        if a[0] > a[1] {
+            a.swap(0, 1);
+        }
+        if a[2] > a[3] {
+            a.swap(2, 3);
+        }
+        if a[0] > a[2] {
+            a.swap(0, 2);
+        }
+        if a[1] > a[3] {
+            a.swap(1, 3);
+        }
+        if a[1] > a[2] {
+            a.swap(1, 2);
         }
 
-        let p = self.permutation();
+        // println!("{:?}", a);
 
-        let mut answer = 0;
+        // println!("sizes: {:?}", self.sizes[c]);
 
-        answer
+        let answer = a
+            .into_iter()
+            .chunk_by(|x| x.0)
+            .into_iter()
+            .fold(0, |acc, ele| {
+                // println!("{} {:?}", acc, ele.0);
+                let v: SmallVec<[u32; 4]> = ele.1.map(|x| x.1).collect();
+                acc * self.nck(self.sizes[c][ele.0] + v.len() as u32 - 1, v.len() as u32)
+                    + self.multicolex(v)
+            });
+
+        println!("answer: {}", answer);
+        println!("offsets: {:?}", self.offsets[c]);
+
+        answer + self.offsets[c]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use smallvec::smallvec;
+
+    #[test]
+    fn test_indexer_simple_small() {
+        let indexer = Indexer::new(vec![2]);
+
+        let input = smallvec![3];
+
+        let actual = indexer.index(input);
+        let expect = 0;
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_indexer_simple_large() {
+        let indexer = Indexer::new(vec![2]);
+
+        let input = smallvec![1 << 12 | 1 << 25];
+
+        let actual = indexer.index(input);
+        let expect = 168;
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_indexer_1() {
+        let indexer = Indexer::new(vec![2, 3]);
+
+        let input = smallvec![1 << 12 | 1, 1 << 4 | 1 << 22 | 1 << 24];
+
+        let actual = indexer.index(input);
+        let expect = 123930;
+
+        assert_eq!(actual, expect);
+    }
+
+    #[test]
+    fn test_indexer_2() {
+        let indexer = Indexer::new(vec![2, 3]);
+
+        let input = smallvec![1 << 4 | 1 << 21, 1 << 5 | 1 << 22 | 1 << 37];
+
+        let actual = indexer.index(input);
+        let expect = 772331;
+
+        assert_eq!(actual, expect);
     }
 }
