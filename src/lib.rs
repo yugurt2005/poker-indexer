@@ -11,6 +11,8 @@ const SUITS: u32 = 4;
 pub struct Indexer {
     rounds: Vec<u32>,
 
+    pub count: u32,
+
     choose: Vec<Vec<u32>>,
 
     colex: Vec<u32>,
@@ -36,6 +38,8 @@ impl Indexer {
 
         let mut indexer = Indexer {
             rounds,
+
+            count: 0,
 
             choose: Vec::new(),
 
@@ -156,8 +160,6 @@ impl Indexer {
                     self.sizes.last_mut().unwrap()[x] = s;
                 }
             }
-
-            println!("{:?}: {:?}", config, self.sizes.last().unwrap());
         }
 
         self.offsets.push(0);
@@ -181,6 +183,8 @@ impl Indexer {
 
             self.offsets.push(offset + self.offsets[c]);
         }
+
+        self.count = *self.offsets.last().unwrap();
     }
 
     fn build_map(&mut self, mut permutation: [u32; SUITS as usize], round: usize) {
@@ -315,8 +319,6 @@ impl Indexer {
             a[i] = (self.order[p][i], x)
         }
 
-        println!("{:?} + {}", a, c);
-
         if a[0] > a[1] {
             a.swap(0, 1);
         }
@@ -335,11 +337,11 @@ impl Indexer {
 
         let mut answer = 0;
 
-        let mut cnt = 0;
-        let mut sum = 0;
+        let mut cnt = 1;
+        let mut sum = a[0].1;
         let mut pre = a[0].0;
 
-        for (i, x) in a {
+        for &(i, x) in a[1..].iter() {
             if i == pre {
                 sum += self.nck(x + cnt, 1 + cnt);
                 cnt += 1;
@@ -411,8 +413,6 @@ impl Indexer {
             }
         }
 
-        println!("{:?} + {}", groups, c);
-
         let mut answer = smallvec![0; self.rounds.len()];
 
         for i in 0..SUITS as usize {
@@ -426,13 +426,10 @@ impl Indexer {
                 let s = self.nck(r, n);
 
                 let mut shifted = self.index[n as usize][(groups[i] % s) as usize];
-                println!("{}, {}: {:?}", i, j, shifted);
 
                 while shifted > 0 {
                     let p = shifted.trailing_zeros();
                     let b = 1 << p;
-
-                    println!("{}", self.unset[p as usize][u as usize]);
 
                     x |= 1 << self.unset[p as usize][u as usize];
 

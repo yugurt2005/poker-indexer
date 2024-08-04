@@ -4,7 +4,7 @@ use rand::{self, Rng};
 use poker_indexer::Indexer;
 use smallvec::SmallVec;
 
-fn bench(c: &mut Criterion) {
+fn bench_index(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
     let rounds = vec![2, 3, 1, 1];
@@ -42,5 +42,22 @@ fn bench(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench);
+fn bench_unindex(c: &mut Criterion) {
+    let mut rng = rand::thread_rng();
+
+    let rounds = vec![2, 3, 1, 1];
+
+    let indexer = Indexer::new(rounds.clone());
+    c.bench_function("Unindexing", |b| {
+        b.iter_batched(
+            || rng.gen_range(0..indexer.count),
+            |input| {
+                indexer.unindex(black_box(input));
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+}
+
+criterion_group!(benches, bench_index, bench_unindex);
 criterion_main!(benches);
