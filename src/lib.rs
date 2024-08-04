@@ -203,8 +203,6 @@ impl Indexer {
 
                 self.map[p as usize] = self.configs.binary_search(&sorted).unwrap();
 
-                // println!("{}: {:?} | {:?}", p, permutation, self.order[p as usize]);
-
                 self.build_map(permutation, round + 1);
             }
 
@@ -252,63 +250,44 @@ impl Indexer {
         p as usize
     }
 
-    fn colex(&self, mut s: u64, u: u64) -> u32 {
-        // TODO: optimize using memoization
-        let mut answer = 0;
+    fn colex(&self, s: u64, u: u64) -> u32 {
+        let mut x = s as i64;
+        let mut i = 0;
+        while x > 0 {
+            let b = (x & -x) as u64;
 
-        let mut i = 1;
-        while s > 0 {
-            let p = s.trailing_zeros();
-            let b = 1 << p;
+            let m = b >> (b - 1 & u).count_ones();
 
-            let mask = b - 1;
-            let rank = p - (mask & u).count_ones();
-
-            answer += self.nck(rank as u32, i);
-
-            s &= s - 1;
-            i += 1;
+            i |= m;
+            x &= x - 1;
         }
 
-        answer
-    }
-
-    fn multicolex(&self, s: SmallVec<[u32; 4]>) -> u32 {
-        let mut answer = 0;
-
-        for i in 0..s.len() {
-            answer += self.nck(i as u32 + s[i], i as u32 + 1);
-        }
-
-        answer
+        self.colex[i as usize]
     }
 
     pub fn index(&self, input: SmallVec<[u64; 4]>) -> u32 {
         let p = self.permutation(&input);
         let c = self.map[p];
 
-        // println!("p: {}, c: {}", p, c);
+        let mut a = [(0, 0); 4];
+        for i in 0..SUITS as usize {
+            let mut x = 0;
+            let mut m = 1;
 
-        let mut a: SmallVec<[(usize, u32); 4]> = (0..SUITS as usize)
-            .map(|i| {
-                let mut x = 0;
-                let mut m = 1;
+            let mut used: u64 = 0;
+            for &cards in &input {
+                let cards = cards >> RANKS * i as u32 & ((1 << RANKS) - 1);
 
-                let mut used: u64 = 0;
-                for &cards in &input {
-                    let cards = cards >> RANKS * i as u32 & ((1 << RANKS) - 1);
+                let s = self.nck(RANKS - used.count_ones(), cards.count_ones());
 
-                    let s = self.nck(RANKS - used.count_ones(), cards.count_ones());
+                x += m * self.colex(cards, used);
+                m *= s;
 
-                    x += m * self.colex(cards, used);
-                    m *= s;
+                used |= cards;
+            }
 
-                    used |= cards;
-                }
-
-                (self.order[p][i], x)
-            })
-            .collect();
+            a[i] = (self.order[p][i], x)
+        }
 
         if a[0] > a[1] {
             a.swap(0, 1);
@@ -326,23 +305,26 @@ impl Indexer {
             a.swap(1, 2);
         }
 
-        // println!("{:?}", a);
+        let mut answer = 0;
 
-        // println!("sizes: {:?}", self.sizes[c]);
+        let mut cnt = 0;
+        let mut sum = 0;
+        let mut pre = 0;
 
-        let answer = a
-            .into_iter()
-            .chunk_by(|x| x.0)
-            .into_iter()
-            .fold(0, |acc, ele| {
-                // println!("{} {:?}", acc, ele.0);
-                let v: SmallVec<[u32; 4]> = ele.1.map(|x| x.1).collect();
-                acc * self.nck(self.sizes[c][ele.0] + v.len() as u32 - 1, v.len() as u32)
-                    + self.multicolex(v)
-            });
+        for (i, x) in a {
+            if i == pre {
+                sum += self.nck(x + cnt, 1 + cnt);
+                cnt += 1;
+            }
+            else {
+                answer = answer * self.nck(self.sizes[c][i] + cnt - 1, cnt) + sum;
 
-        println!("answer: {}", answer);
-        println!("offsets: {:?}", self.offsets[c]);
+                sum = x;
+                cnt = 1;
+                pre = i;
+            }
+        }
+        answer = answer * self.nck(self.sizes[c][pre] + cnt - 1, cnt) + sum;
 
         answer + self.offsets[c]
     }
