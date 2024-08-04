@@ -10,8 +10,13 @@ path = "src/lib.rs"
 [dependencies]
 rand = "0.8.5"
 smallvec = "1.13.2"
-hand_indexer = { path = "src/poker-hand-indexer-master" }
-bitintr = "0.3.0"
+itertools = "0.13.0"
 
 [dev-dependencies]
 criterion = "0.5.1"
+
+[[bench]]
+name = "indexer_bench"
+harness = false
+path = "benchmarks/indexer_bench.rs"
+
