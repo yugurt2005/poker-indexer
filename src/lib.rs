@@ -7,19 +7,6 @@ const CHOOSE_SIZE: usize = 15;
 const RANKS: u32 = 13;
 const SUITS: u32 = 4;
 
-pub struct State {
-    round: usize,
-
-    p: u32,
-    m: u32,
-
-    i: usize,
-
-    used: u64,
-
-    indices: [u32; SUITS as usize],
-}
-
 pub struct Indexer {
     rounds: Vec<u32>,
 
@@ -34,7 +21,7 @@ pub struct Indexer {
 
     map: Vec<usize>,
 
-    order: Vec<[usize; SUITS as usize]>,
+    order: Vec<[u8; SUITS as usize]>,
 }
 
 impl Indexer {
@@ -79,7 +66,7 @@ impl Indexer {
             let mut x = i;
             let mut c = 1;
             while c <= i.count_ones() {
-                self.colex[i as usize] += self.nck(x.count_ones(), c);
+                self.colex[i as usize] += self.nck(x.trailing_zeros(), c);
 
                 x &= x - 1;
                 c += 1;
@@ -118,8 +105,7 @@ impl Indexer {
                     let mut r = RANKS;
                     let mut s = 1;
                     for k in 0..=round {
-                        let c =
-                            config[j as usize] >> (self.rounds.len() - k - 1) * 4 & 0b1111;
+                        let c = config[j as usize] >> (self.rounds.len() - k - 1) * 4 & 0b1111;
 
                         s *= self.nck(r, c);
                         r -= c;
@@ -131,12 +117,8 @@ impl Indexer {
                         k += 1;
                     }
 
-
-
                     j = k as u32;
                 }
-
-                
 
                 self.enumerate_configs(config, round + 1);
             }
@@ -173,6 +155,29 @@ impl Indexer {
         }
     }
 
+    fn permutation(&self) -> usize {
+        0
+    }
+
+    fn colex(&self, mut s: u64, u: u64) -> u32 {
+        let mut answer = 0;
+
+        let m = s.count_ones();
+        for i in 1..=m {
+            let p = 5; //s.trailing_zeros();
+            let b = 1 << p;
+
+            let mask = b - 1;
+            let rank = p - (mask & u).count_ones();
+
+            answer += self.nck(rank as u32, i);
+
+            s &= s - 1;
+        }
+
+        answer
+    }
+
     #[inline]
     fn colex_multi_1(&self, a1: u32) -> u32 {
         a1
@@ -193,70 +198,25 @@ impl Indexer {
         a4 + self.nck(a3 + 1, 2) + self.nck(a2 + 2, 3) + self.nck(a1 + 3, 4)
     }
 
-    pub fn index(&self, state: &mut State, mut cards: u64) -> u32 {
-        let mut r = self.rounds[state.round];
-        let mut p = state.p;
-        let mut m = state.m;
-        for i in 0..SUITS {
-            let c = state.m * (cards >> RANKS * i & ((1 << RANKS) - 1)).count_ones();
-
-            p += c * m;
-            m *= r + 1;
-
-            r -= c;
-        }
-
-        let u = cards | state.used;
-
-        let mut shifted = [0u32; SUITS as usize];
-        while cards > 0 {
-            let i = cards.trailing_zeros();
-
-            shifted[i as usize / 4] |= 1
-                << (i % 4
-                    - (((1 << i) - 1 & state.used) >> RANKS * i / 4 & ((1u64 << RANKS) - 1))
-                        .count_ones());
-
-            cards &= cards - 1;
-        }
+    pub fn index(&self, input: SmallVec<[u64; 4]>) -> u32 {
+        let mut indices = [0; 4];
 
         for i in 0..SUITS as usize {
-            state.indices[i] +=
-                self.colex[shifted[i] as usize] * self.sizes[state.i][self.order[p as usize][i]];
-        }
+            let mut used = 0;
+            for &cards in &input {
+                let cards = cards >> RANKS * i as u32 & ((1 << RANKS) - 1);
 
-        let k = self.map[p as usize];
+                indices[i] += self.colex(cards, used)
+                    * self.nck(RANKS - used.count_ones(), cards.count_ones());
 
-        let mut order = [0; 4];
-        for i in 0..SUITS as usize {
-            order[self.order[p as usize][i]] = i;
-        }
-
-        let mut sort = |a, b| {
-            if self.configs[k][a] == self.configs[k][b]
-                && state.indices[order[a]] > state.indices[order[b]]
-            {
-                order.swap(a, b);
+                used |= cards;
             }
-        };
+        }
 
-        sort(0, 1);
-        sort(2, 3);
-        sort(0, 2);
-        sort(1, 3);
-        sort(1, 2);
+        let p = self.permutation();
 
         let mut answer = 0;
 
-        state.round += 1;
-
-        state.p = p;
-        state.m = m;
-
-        state.i = k;
-
-        state.used = u;
-
-        answer + self.offsets[k]
+        answer
     }
 }
