@@ -10,8 +10,6 @@ path = "src/lib.rs"
 [dependencies]
 rand = "0.8.5"
 smallvec = "1.13.2"
-hand_indexer = { path = "src/poker-hand-indexer-master" }
-bitintr = "0.3.0"
 itertools = "0.13.0"
 
 [dev-dependencies]
