@@ -20,4 +20,5 @@ criterion = "0.5.1"
 [[bench]]
 name = "indexer_bench"
 harness = false
+path = "benchmarks/indexer_bench.rs"
 
