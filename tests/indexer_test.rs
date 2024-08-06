@@ -8,9 +8,9 @@ fn stress_test_bidirectional_random() {
 
     let mut rng = rand::thread_rng();
     for _ in 0..1000 {
-        let input = rng.gen_range(0..indexer.count);
+        let input = rng.gen_range(0..indexer.count[3]);
 
-        let actual = indexer.index(indexer.unindex(input));
+        let actual = indexer.index(indexer.unindex(input, 3));
         let expect = input;
 
         assert_eq!(actual, expect);
@@ -21,8 +21,8 @@ fn stress_test_bidirectional_random() {
 fn stress_test_bidirectional_all() {
     let indexer = Indexer::new(vec![2, 3]);
 
-    for i in 0..indexer.count as u32 {
-        let actual = indexer.index(indexer.unindex(i));
+    for i in 0..indexer.count[1] as u32 {
+        let actual = indexer.index(indexer.unindex(i, 1));
         let expect = i;
 
         assert_eq!(actual, expect);

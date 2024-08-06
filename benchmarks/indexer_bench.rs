@@ -7,7 +7,7 @@ use smallvec::SmallVec;
 fn bench_index(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
 
-    let rounds = vec![2, 3, 1, 1];
+    let rounds = vec![2, 5];
 
     let indexer = Indexer::new(rounds.clone());
     c.bench_function("Indexing", |b| {
@@ -35,7 +35,7 @@ fn bench_index(c: &mut Criterion) {
                 input
             },
             |input| {
-                indexer.index(black_box(input));
+                black_box(indexer.index(black_box(input)));
             },
             criterion::BatchSize::SmallInput,
         );
@@ -50,9 +50,9 @@ fn bench_unindex(c: &mut Criterion) {
     let indexer = Indexer::new(rounds.clone());
     c.bench_function("Unindexing", |b| {
         b.iter_batched(
-            || rng.gen_range(0..indexer.count),
+            || rng.gen_range(0..indexer.count[3]),
             |input| {
-                indexer.unindex(black_box(input));
+                indexer.unindex(black_box(input), black_box(4));
             },
             criterion::BatchSize::SmallInput,
         );
