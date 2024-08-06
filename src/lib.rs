@@ -374,8 +374,6 @@ impl Indexer {
         }
         answer = answer * self.nck(self.sizes[round][c][SUITS as usize - pre] + cnt - 1, cnt) + sum;
 
-        println!("{}", answer);
-
         answer + self.offsets[round][c]
     }
 
